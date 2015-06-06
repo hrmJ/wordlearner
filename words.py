@@ -1,8 +1,10 @@
 #! /usr/bin/env python
 #imports:
 import os.path
+import os
 from time import ctime
 import glob
+from collections import defaultdict
 import csv
 import codecs
 import pickle
@@ -13,6 +15,7 @@ class Word:
     ''' The units that are asked'''
     #list word ids
     wids = list()
+    currentwords = dict()
     def __init__(self,language,lemma):
         '''initialize by setting the grade etc'''
         self.grade = 0
@@ -21,7 +24,7 @@ class Word:
         self.lemma = lemma
         # The translations/equivalent/closely related word entries are linked in this dict:
         # It has language codes as keys and lists of word objects as values
-        #self.linkwords 
+        self.linkwords = list()
         #create an id for the word based on the length of the id list
         self.wid = len(Word.wids)
         #if this id already in the list, increment till a unique one will be generated
@@ -29,6 +32,19 @@ class Word:
             self.wid += 1
         Word.wids.append(self.wid)
         #How should I arrange the word ids? Are they needed?
+
+    def cardquestion(self):
+        """Ask a simple flash card type question"""
+        #Set the language to be asked
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print('-'*20)
+        input('{}\n\npress enter to view answers.'.format(self.lemma))
+        answers = list()
+        for linkid in self.linkwords:
+            print(Word.currentwords[linkid].lemma)
+        input('Press enter to go to next question')
+
+
 
 class Noun(Word):
     pass
@@ -44,10 +60,11 @@ class Wordset:
     '''A group of words that can be build on the fly or 
     Created from a csv file or...'''
     wordsets = dict()
+    sourcelanguage = ''
 
     def __init__(self):
         #initialize a list containing word objects
-        self.words = list()
+        self.words = dict()
         namemenu = freemenu('Name of the new wordset: ')
         namemenu.prompt()
         #Ask for a valid name until the user gives one
@@ -60,6 +77,18 @@ class Wordset:
         #add information about creator and creation date
         self.creator = 'default user'
         self.creationdate = ctime()
+
+    def askone(self):
+        """Practice the words in this set"""
+        for wid, word in self.words.items():
+            if word.language == Wordset.sourcelanguage:
+                word.cardquestion()
+
+    def addNewWord(self, newWord, linkWord):
+        """Adds a new word to the wordset"""
+        self.words[newWord.wid] = newWord
+        self.words[linkWord.wid] = linkWord
+        newWord.linkwords.append(linkWord.wid)
 
 class Singles_set(Wordset):
     '''A word set that consists of simple word-to-word translation pairs'''
@@ -87,25 +116,11 @@ class Singles_set(Wordset):
         #iterate throguh all the words in the csv list
         for wordrow in wordrows:
             #Use the third column of csv to get the POS
-            try:
-                if wordrow[2] == 'verb':
-                    self.words.append(Verb(self.languages[0],wordrow[0]))
-                    self.words.append(Verb(self.languages[1],wordrow[1]))
-                elif wordrow[2] == 'noun':
-                    self.words.append(Noun(self.languages[0],wordrow[0]))
-                    self.words.append(Noun(self.languages[1],wordrow[1]))
-            except:
-                pass
-            #Save information about the relation between the words in 1st and 2nd column
-            self.words[-2].linkwords[self.languages[1]]=self.words[-1].wid
-            self.words[-1].linkwords[self.languages[0]]=self.words[-2].wid
-#Question {{{3
-class Question:
-    '''A question superclass for different types of questions
-    that will be asked based on the Word objects'''
-    pass
-
-# Run the script:
-#if __name__ == "__main__":
-#    main()
-#def main():
+            if wordrow[2] == 'verb':
+                self.addNewWord(Verb(self.languages[0],wordrow[0]),
+                                Verb(self.languages[1],wordrow[1])
+                                )
+            elif wordrow[2] == 'noun':
+                self.addNewWord(Noun(self.languages[0],wordrow[0]),
+                                Noun(self.languages[1],wordrow[1])
+                                )

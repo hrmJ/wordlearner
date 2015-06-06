@@ -22,9 +22,8 @@ class yesnomenu(Menu):
 class multimenu(Menu):
     '''Create a menu object that has the possible values listed as a dictionary,
     where the keys represent answers and the values represent explanations of each answer'''
-    def __init__(self, question, validanswers):
+    def __init__(self, validanswers):
         self.validanswers=validanswers
-        self.question = question
 
 class freemenu(Menu):
     def __init__(self, question):
