@@ -3,12 +3,15 @@
 import os.path
 import os
 from time import ctime
+import datetime
 import glob
 from collections import defaultdict
 import csv
 import codecs
 import pickle
 from menus import Menu, yesnomenu, multimenu, freemenu
+from dbcontrol import SqlaCon, DbWordset, DbWord, TargetWord
+
 #classes:
 #Word
 class Word:
@@ -44,8 +47,6 @@ class Word:
             print(Word.currentwords[linkid].lemma)
         input('Press enter to go to next question')
 
-
-
 class Noun(Word):
     pass
 
@@ -61,18 +62,29 @@ class Wordset:
     Created from a csv file or...'''
     wordsets = dict()
     sourcelanguage = ''
+    currentset = False
 
-    def __init__(self):
+    def __init__(self, wstype=''):
+        #Connect to db
+        con = SqlaCon()
+        con.LoadSession()
         #initialize a list containing word objects
         self.words = dict()
         namemenu = freemenu('Name of the new wordset: ')
         namemenu.prompt()
         #Ask for a valid name until the user gives one
-        while namemenu.answer in Wordset.wordsets:
+        while con.session.query(DbWordset).filter(DbWordset.name==namemenu.answer).first():
             print("Wordset '{}' already exists. Please give a new one.".format(namemenu.answer))
             namemenu.prompt()
-        #insert the set as a new entry in the class dict
+        #insert the set into db
+        newset = DbWordset(name = namemenu.answer, wstype=wstype, creationdate = datetime.datetime.today(), creator = 'user x', theme = 'uncategorized')
+        con.session.add(newset)
+        con.session.commit()
+        self.dbid = ''
+        # Add this to the class variable
         Wordset.wordsets[namemenu.answer] = self
+        # Make this the current set
+        Wordset.currentset = self
         self.name = namemenu.answer
         #add information about creator and creation date
         self.creator = 'default user'
@@ -86,12 +98,23 @@ class Wordset:
 
     def addNewWord(self, newWord, linkWord):
         """Adds a new word to the wordset"""
+        #!!>>
+        con = SqlaCon()
+        con.LoadSession()
         self.words[newWord.wid] = newWord
         self.words[linkWord.wid] = linkWord
         newWord.linkwords.append(linkWord.wid)
 
+class Emptyset(Wordset):
+    """A completely new set"""
+    def __init__(self):
+        """initialize"""
+        wstypemenu = multimenu({'1':'Lemmas'},'Select the type of the created wordset')
+        Wordset.__init__(self, wstypemenu.validanswers[wstypemenu.answer])
+
 class Singles_set(Wordset):
     '''A word set that consists of simple word-to-word translation pairs'''
+
 
     def createfromcsv(self):
         'put the type name to n attribute'
@@ -124,3 +147,10 @@ class Singles_set(Wordset):
                 self.addNewWord(Noun(self.languages[0],wordrow[0]),
                                 Noun(self.languages[1],wordrow[1])
                                 )
+##
+
+def InsertWord(wsid, con):
+    """Insert new words to the set"""
+    ws = con.session.query(DbWordset).get(wsid)
+    ws.words.append(DbWord(input('language: '),input('lemma: '),input('pos: ')))
+    return ws

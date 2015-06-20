@@ -3,7 +3,9 @@ from sqlalchemy import Column, Date, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, backref, sessionmaker
 from menus import Menu, yesnomenu, multimenu, freemenu
+from termcolor import colored
 import datetime
+import os
 
 engine = create_engine('sqlite:///words.db', echo=False)
 Base = declarative_base()
@@ -82,10 +84,25 @@ class DbWordset(Base):
             setSourceLang()
         self.words.append(DbWord())
 
+
 class LemmaWordset(DbWordset):
     """" .. """
     def __init__(self,creationdate=datetime.datetime.today(),name='unspecified',creator='unspecified',theme='unspecified',subtheme='unspecified',wstype='Lemmas'):
         super().__init__(name=name,creator=creator,theme=theme,subtheme=subtheme,wstype=wstype,creationdate=creationdate)
+
+    def CardLemma(self):
+        """Practice lemmas with basic flashcard questions"""
+        practmenu = yesnomenu()
+        for word in self.words:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            practmenu.question=('Do you know {} in tl?'.format(colored(word.lemma,'red')))
+            practmenu.prompt_valid()
+            print('\n'*2 + '='*50 + '\n')
+            for tword in word.targetwords:
+                print(tword.lemma + '\n')
+            print('='*50 + '\n')
+            input('press enter to continue.')
+
 
 class SqlaCon:
     """Autoconn:ct to sqlite via sqlalchemy"""

@@ -8,24 +8,28 @@ import codecs
 import pickle
 import os.path
 import glob
-from menus import Menu, yesnomenu, multimenu
-from words import Word, Wordset, Singles_set
+from menus import Menu, yesnomenu, multimenu, freemenu
+import datetime
+from dbcontrol import SqlaCon, DbWordset, DbWord, TargetWord, LemmaWordset
+#from words import Word, Wordset, Singles_set
+import words
 
 
 def quit():
     #update the wordset pickle
-    pickle.dump(Wordset.wordsets,open("wordsets.p", "wb"))
-    #update the wids pickle
-    pickle.dump(Word.wids,open("wids.p", "wb"))
+    #pickle.dump(Wordset.wordsets,open("wordsets.p", "wb"))
+    ##update the wids pickle
+    #pickle.dump(Word.wids,open("wids.p", "wb"))
+    pass
 
 def start():
     #load the word indexes
     print('Welcome to wordlearner 0.1!\n\n')
-    if os.path.isfile('wids.p'):
-        Word.wids = pickle.load(open('wids.p', "rb"))
-    #list existing wordsets
-    if os.path.isfile('wordsets.p'):
-        Wordset.wordsets = pickle.load(open('wordsets.p', "rb"))
+    #if os.path.isfile('wids.p'):
+    #    Word.wids = pickle.load(open('wids.p', "rb"))
+    ##list existing wordsets
+    #if os.path.isfile('wordsets.p'):
+    #    Wordset.wordsets = pickle.load(open('wordsets.p', "rb"))
 
 
 class options:
@@ -40,6 +44,7 @@ class MainMenu:
                        '2': 'View existing wordsets',
                        '3': 'Append to existing wordset',
                        '4': 'Practice',
+                       '5': 'Insert words to the current set',
                        'q': 'quit'}
 
     def __init__(self):
@@ -68,45 +73,74 @@ class MainMenu:
     def createset(self):
         #ask about the type of the new set
         answers = {'1': 'Singles_set',
+                   '2': 'Lemmas',
                    'h': 'help',
                    'c': 'cancel'}
         wlmenu = multimenu(answers)
         wlmenu.question = 'Give the type of the new set'
         wlmenu.prompt_valid()
         if wlmenu.answer == '1':
-            newset = Singles_set()
+            newset = words.Singles_set()
             newset.createfromcsv()
             print('Succesfully created wordset "{}"'.format(newset.name))
             #update the wordset pickle
             pickle.dump(Wordset.wordsets,open("wordsets.p", "wb"))
             #update the wids pickle
             pickle.dump(Word.wids,open("wids.p", "wb"))
+        elif wlmenu.answer == '2':
+            con.LoadSession()
+            #initialize a list containing word objects
+            self.words = dict()
+            namemenu = freemenu('Name of the new wordset: ')
+            namemenu.prompt()
+            #Ask for a valid name until the user gives one
+            while con.session.query(DbWordset).filter(DbWordset.name==namemenu.answer).first():
+                print("Wordset '{}' already exists. Please give a new one.".format(namemenu.answer))
+                namemenu.prompt()
+            #insert the set into db
+            newset = LemmaWordset(name = namemenu.answer, creationdate = datetime.datetime.today(), creator = 'user x', theme = 'uncategorized')
+            #insert words
+            inswordmenu = multimenu({'n':'insert a new word','q':'stop inserting'},promptnow='Insert words to the word set')
+            while inswordmenu.answer == 'n':
+                newset.InsertWord()
+                inswordmenu.prompt_valid()
+            con.session.add(newset)
+            con.session.commit()
+            con.session.close()
+
 
     def viewsets(self):
         #Check if there are wordsets
-        if Wordset.wordsets:
-            #print the existing ones {{{2
-            print('\n'*3)
-            print('{5:3} | {0:20} | {1:20} | {2:20} | {3:20} | {4:30} '.format('Name','Type','Creator','languages','Creation date','id'))
-            print('-'*4*26)
-            #To make it easier to select a wordset by number
-            wordsetid = 1
-            wordsetkeys = dict()
-            for key, value in Wordset.wordsets.items():
-                wordsetkeys[str(wordsetid)] = key
-                print('{5:3} | {0:20} | {1:20} | {2:20} | {3:20} | {4:30} '.format(key,value.wstype,value.creator,", ".join(value.languages),value.creationdate, wordsetid))
-                wordsetid += 1
-            print('\n'*3)
-            self.selectedwordset = wordsetkeys[str(input('Write the id of the wordset you want to use:'))]
-            Word.currentwords = Wordset.wordsets[self.selectedwordset].words
-        else:
-            print('No wordsets created.')
+        con = SqlaCon()
+        con.LoadSession()
+        res = con.session.query(DbWordset).all()
+        print('\n'*3)
+        print('{wsid:3} | {wsname:20} | {wstype:20} | {wscreator:20} | {wscdate:10} | {wstheme:20} | {wssubtheme:20}'.format(wsname='Name',wstype='Type',wscreator='Creator',wscdate='Created',wsid='id',wstheme='Theme', wssubtheme='Subtheme'))
+        print('-'*4*30)
+        for wset in res:
+            print('{wsid:3} | {wsname:20} | {wstype:20} | {wscreator:20} | {wscdate:10} | {wstheme:20} | {wssubtheme:20}'.format(wsname=wset.name,wstype=wset.wstype,wscreator=wset.creator,wscdate=str(wset.creationdate),wsid=wset.id,wstheme=wset.theme, wssubtheme=wset.subtheme))
+        self.cursetid = int(input('Select a wordset by id:'))
 
     def practice(self):
         #testing:
-        Wordset.sourcelanguage = 'fi'
-        Wordset.wordsets[self.selectedwordset].askone()
+        con.LoadSession()
+        ws = con.session.query(LemmaWordset).get(self.cursetid)
+        ws.CardLemma()
         input('Press enter to continue.')
+
+    def inswords(self):
+        """Insert words to the current wordset"""
+        con.LoadSession()
+        ws = con.session.query(DbWordset).get(self.cursetid)
+        inswordmenu = multimenu({'n':'insert next word','q':'stop inserting'},promptnow='Insert words to the current set')
+        while inswordmenu.answer == 'n':
+            ws.words.append(DbWord())
+            inswordmenu.prompt_valid()
+        input('Press enter to continue')
+        #"""Insert new words to the set"""
+        con.session.add(ws)
+        con.session.commit()
+        con.session.close()
 
     def MenuChooser(self,answer):
         if answer == 'q':
@@ -118,9 +152,12 @@ class MainMenu:
             self.viewsets()
         elif answer == '4':
             self.practice()
+        elif answer == '5':
+            self.inswords()
 
 
 wordmenu = MainMenu()
 start()
+con = SqlaCon()
 while wordmenu.run == True:
     wordmenu.runmenu()
