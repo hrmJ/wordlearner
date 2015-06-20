@@ -8,6 +8,24 @@ import datetime
 engine = create_engine('sqlite:///words.db', echo=False)
 Base = declarative_base()
 
+
+class TargetWord(Base):
+    """Words that are answers"""
+    __tablename__ = "targetwords"
+    id = Column(Integer, primary_key=True)
+    lemma = Column(String)  
+    language = Column(String)  
+    pos = Column(String)  
+    source_id = Column(Integer, ForeignKey("words.id"))
+    DbWord = relationship("DbWord", backref=backref("targetwords", order_by=id),enable_typechecks=False)
+
+    def __init__(self, insertManually=True):
+        """ """
+        if insertManually:
+            self.lemma = input('Give the lemma of this word: ')
+            self.pos = DbWord.posmenu.prompt_valid(definedquestion='Give the part of speech for this word')
+            self.language = DbWordset.targetlang
+
 class DbWord(Base):
     """The table that includes all the words"""
     __tablename__ = "words"
@@ -22,47 +40,16 @@ class DbWord(Base):
     twordmenu = multimenu({'n':'Insert next target word','q':'Stop inserting targetwords'})
 
     def __init__(self, insertManually=True):
-        """ """
+        """ Insert a new word"""
+        if not DbWordset.sourcelang or not DbWordset.targetlang:
+            setSourceLang()
         if insertManually:
             self.lemma = input('Give the lemma of this word: ')
             self.pos = DbWord.posmenu.prompt_valid(definedquestion='Give the part of speech for this word')
             self.language = DbWordset.sourcelang
-            self.targetwords.append(TargetWord())
             while DbWord.twordmenu.prompt_valid(definedquestion='Insert target words:') == 'n':
                 self.targetwords.append(TargetWord())
 
-
-
-class TargetWord(Base):
-    """Words that are answers"""
-    __tablename__ = "targetwords"
-    id = Column(Integer, primary_key=True)
-    lemma = Column(String)  
-    language = Column(String)  
-    pos = Column(String)  
-    source_id = Column(Integer, ForeignKey("words.id"))
-    DbWordset = relationship("DbWords", backref=backref("targetwords", order_by=id),enable_typechecks=False)
-
-    def __init__(self, insertManually=True):
-        """ """
-        if insertManually:
-            self.lemma = input('Give the lemma of this word: ')
-            TargetWord.posmenu
-            self.pos = DbWord.posmenu.prompt_valid(definedquestion='Give the part of speech for this word')
-            self.language = DbWordset.targetlang
-
-
-class DbLinkword(Base):
-    """For each word, list equivalents"""
-    __tablename__ = "linkwords"
- 
-    id = Column(Integer, primary_key=True)
-    #Link this table with the dishes table
-    #linkword_id = Column(Integer, ForeignKey("words.id"))
-    source = Column(Integer)
-    target = Column(Integer)
-    priority = Column(Integer)
- 
 class DbWordset(Base):
     """ Words are organized in sets"""
     # DB table
@@ -91,14 +78,9 @@ class DbWordset(Base):
 
     def InsertWord(self):
         """Insert new words to the set"""
-        if not DbWordset.sourcelang:
-            DbWordset.langmenu.prompt_valid(definedquestion='Select source language')
-            DbWordset.sourcelang = DbWordset.langmenu.answer
-            DbWordset.langmenu.prompt_valid(definedquestion='Select target language')
-            DbWordset.targetlang = DbWordset.langmenu.answer
-
+        if not DbWordset.sourcelang or not DbWordset.targetlang:
+            setSourceLang()
         self.words.append(DbWord())
-
 
 class LemmaWordset(DbWordset):
     """" .. """
@@ -123,6 +105,13 @@ class SqlaCon:
         self.LoadSession()
         self.session.add(dbobj)
         self.session.commit()
+
+def setSourceLang():
+    """set the language parametres"""
+    DbWordset.langmenu.prompt_valid(definedquestion='Select source language')
+    DbWordset.sourcelang = DbWordset.langmenu.answer
+    DbWordset.langmenu.prompt_valid(definedquestion='Select target language')
+    DbWordset.targetlang = DbWordset.langmenu.answer
 
 
 #class Declination(Base):
