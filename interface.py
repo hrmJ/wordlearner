@@ -45,6 +45,7 @@ class MainMenu:
                        '3': 'Append to existing wordset',
                        '4': 'Practice',
                        '5': 'Insert words to the current set',
+                       '6': 'Inflect words in this set',
                        'q': 'quit'}
 
     def __init__(self):
@@ -126,6 +127,9 @@ class MainMenu:
         con.LoadSession()
         ws = con.session.query(LemmaWordset).get(self.cursetid)
         ws.CardLemma()
+        #Commit changes:
+        con.session.add(ws)
+        con.session.commit()
         input('Press enter to continue.')
 
     def inswords(self):
@@ -142,6 +146,15 @@ class MainMenu:
         con.session.commit()
         con.session.close()
 
+    def inflectwords(self):
+        con.LoadSession()
+        ws = con.session.query(DbWordset).get(self.cursetid)
+        ws.InflectRusVerb()
+        con.session.add(ws)
+        con.session.commit()
+        con.session.close()
+        input('Press enter to continue')
+
     def MenuChooser(self,answer):
         if answer == 'q':
             self.run = False
@@ -154,6 +167,8 @@ class MainMenu:
             self.practice()
         elif answer == '5':
             self.inswords()
+        elif answer == '6':
+            self.inflectwords()
 
 
 wordmenu = MainMenu()
