@@ -159,8 +159,9 @@ class DbWordset(Base):
             for word in sourceword.targetwords:
                 if word.pos == 'V':
                     infldict = RusVerb(word.lemma)
-                for form, value in infldict.items():
-                    word.inflection.append(Inflection(form,value,1))
+                    for form, value in infldict.items():
+                        stresslist = MarkStress(value)
+                        word.inflection.append(Inflection(form,stresslist[0],stresslist[1]))
 
 class LemmaWordset(DbWordset):
     """" .. """
@@ -197,7 +198,6 @@ class Inflection(Base):
         self.value = value
         self.stress = stress
 
-
 ###### functions ######################################################
 
 def WriteLemmaMeta(thisWord):
@@ -205,8 +205,16 @@ def WriteLemmaMeta(thisWord):
     This
     pass
 
-
-
+def MarkStress(word):
+    """find stress, unaccent the vowel and mark the number"""
+    vowels = {'а́':'а','о́':'о','е́':'е','у́':'у','и́':'и','ы́':'ы','э́':'э','ю́':'ю','я́':'я','ё':'ё'}
+    for stressedvowel, unstressedvowel in vowels.items():
+        if stressedvowel in word.lower():
+            stressidx = word.find(stressedvowel)
+            word = word.replace(stressedvowel,unstressedvowel)
+            #return a list with the word as first value and stressidx as second
+            return [word,stressidx]
+    input('Oho: ' + word)
 ###### other ######################################################
 
 class SqlaCon:
@@ -234,7 +242,6 @@ def setSourceLang():
     DbWordset.sourcelang = DbWordset.langmenu.answer
     DbWordset.langmenu.prompt_valid(definedquestion='Select target language')
     DbWordset.targetlang = DbWordset.langmenu.answer
-
 
 #class Declination(Base):
 #    """For nouns, list the declination in a separate db table"""

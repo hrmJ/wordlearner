@@ -11,8 +11,6 @@ import glob
 from menus import Menu, yesnomenu, multimenu, freemenu
 import datetime
 from dbcontrol import SqlaCon, DbWordset, DbWord, TargetWord, LemmaWordset
-#from words import Word, Wordset, Singles_set
-import words
 
 
 def quit():
