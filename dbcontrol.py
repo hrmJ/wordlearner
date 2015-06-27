@@ -158,6 +158,7 @@ class DbWordset(Base):
         for sourceword in self.words:
             for word in sourceword.targetwords:
                 if word.pos == 'V':
+                    #Fetch inflection information from wiktionary:
                     infldict = RusVerb(word.lemma)
                     for form, value in infldict.items():
                         stresslist = MarkStress(value)
@@ -214,7 +215,7 @@ def MarkStress(word):
             word = word.replace(stressedvowel,unstressedvowel)
             #return a list with the word as first value and stressidx as second
             return [word,stressidx]
-    input('Oho: ' + word)
+
 ###### other ######################################################
 
 class SqlaCon:
