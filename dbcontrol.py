@@ -7,6 +7,7 @@ from termcolor import colored
 import datetime
 import os
 from wiktionary import RusVerb
+import random
 
 engine = create_engine('sqlite:///words.db', echo=False)
 Base = declarative_base()
@@ -73,6 +74,15 @@ class TargetWord(Base):
             self.lemma = input('Give the lemma of this word: ')
             self.pos = DbWord.posmenu.prompt_valid(definedquestion='Give the part of speech for this word')
             self.language = DbWordset.targetlang
+
+    def AskRusConj(self):
+        """Make a question about this word's conjugation"""
+        print('{0}\n{1}{2}'.format(self.lemma,'='*len(self.lemma),'\n'*2))
+        askedforms = ('s1pres','s3pres','p3pres','simp')
+        askedvalues = pickValues(self.inflection,'form',askedforms)
+        for askedvalue in askedvalues:
+            answer = input(askedvalue.form + ': ')
+            input('The correct answer is: ' + askedvalue.value)
 
 class DbWord(Base):
     """The table that includes all the words"""
@@ -164,6 +174,29 @@ class DbWordset(Base):
                         stresslist = MarkStress(value)
                         word.inflection.append(Inflection(form,stresslist[0],stresslist[1]))
 
+    def collectWordsToAsk(self,wordcount):
+        """Make a list of words that will be asked in one way or another"""
+        self.wordstoask = list()
+        #1. Collect all the words that can be used in this question type
+        for sourceword in self.words:
+            for word in sourceword.targetwords:
+                if self.EvalueateWordForQuestion(word):
+                    self.wordstoask.append(word)
+        #2. Limit the number of asked words and shuffle
+        if wordcount>len(self.wordstoask):
+            wordcount = len(self.wordstoask)
+        self.wordstoask = random.sample(self.wordstoask,wordcount)
+
+
+    def EvalueateWordForQuestion(self,word):
+        """"""
+        #Conjugation test for Russian verbs
+        if self.questiontype == 'rusConjug':
+            if word.pos == 'V':
+                return True
+        #If no condition matches, return false
+        return False
+
 class LemmaWordset(DbWordset):
     """" .. """
     def __init__(self,creationdate=datetime.datetime.today(),name='unspecified',creator='unspecified',theme='unspecified',subtheme='unspecified',wstype='Lemmas'):
@@ -183,6 +216,16 @@ class LemmaWordset(DbWordset):
                 word.lemmameta.grade -= 1
                 word.lemmameta.wrong += 1
             word.PrintTargetWords()
+
+    def ConjugationPractice(self):
+        """Questions based on the information about verbs' conjugation
+        """
+        self.questiontype = 'rusConjug'
+        self.collectWordsToAsk(wordcount=10)
+        for word in self.wordstoask:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            word.AskRusConj()
+
 
 class Inflection(Base):
     """Contains word forms"""
@@ -216,6 +259,14 @@ def MarkStress(word):
             #return a list with the word as first value and stressidx as second
             return [word,stressidx]
 
+def pickValues(olist, attr, values):
+    """"""
+    returnlist = list()
+    for o in olist:
+        if getattr(o,attr) in values:
+            returnlist.append(o)
+    return returnlist
+
 ###### other ######################################################
 
 class SqlaCon:
@@ -244,28 +295,4 @@ def setSourceLang():
     DbWordset.langmenu.prompt_valid(definedquestion='Select target language')
     DbWordset.targetlang = DbWordset.langmenu.answer
 
-#class Declination(Base):
-#    """For nouns, list the declination in a separate db table"""
-    #__tablename__ = "declination"
- 
-    #id = Column(Integer, primary_key=True)
-    #name = Column(String)  
-    #iclass = Column(String)
-    #dish = relationship("Dish", backref=backref("ingredients", order_by=id))
- 
-#class Conjugation(Base):
-#    """For verbs, list the conjugation in a separate db table"""
-#    __tablename__ = "conjugation"
-# 
-#    id = Column(Integer, primary_key=True)
-#    name = Column(String)  
-#    # If you want to clssify ingerdients some way
-#    iclass = Column(String)
-#    # Price is also optional
-#    price = Column(Float)
-#    #Link this table with the dishes table
-#    dish_id = Column(Integer, ForeignKey("dishes.id"))
-#    dish = relationship("Dish", backref=backref("ingredients", order_by=id))
-
-# create tables
 Base.metadata.create_all(engine)

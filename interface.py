@@ -121,10 +121,15 @@ class MainMenu:
         self.cursetid = int(input('Select a wordset by id:'))
 
     def practice(self):
-        #testing:
+        """"""
         con.LoadSession()
         ws = con.session.query(LemmaWordset).get(self.cursetid)
-        ws.CardLemma()
+        ##
+        pickptype = multimenu({'1':'Flash cards about lemmas','2':'Russian verb conjugation'},promptnow='Choose practice type')
+        if pickptype.answer == '1':
+            ws.CardLemma()
+        elif pickptype.answer == '2':
+            ws.ConjugationPractice()
         #Commit changes:
         con.session.add(ws)
         con.session.commit()
