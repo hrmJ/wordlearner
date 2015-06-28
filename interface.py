@@ -10,8 +10,9 @@ import os.path
 import glob
 from menus import Menu, yesnomenu, multimenu, freemenu
 import datetime
-from dbcontrol import SqlaCon, DbWordset, DbWord, TargetWord, LemmaWordset
-
+from dbcontrol import SqlaCon, DbWordset, DbWord, TargetWord, LemmaWordset, LemmaMeta, InflMeta
+from sqlalchemy.sql.expression import func
+from sqlalchemy.sql import and_, or_, between
 
 def quit():
     #update the wordset pickle
@@ -126,14 +127,79 @@ class MainMenu:
         ws = con.session.query(LemmaWordset).get(self.cursetid)
         ##
         pickptype = multimenu({'1':'Flash cards about lemmas','2':'Russian verb conjugation'},promptnow='Choose practice type')
+        # Do you want to filter the words that will be asked?
+        #1. by grade
+        #2. by wrong answer
+        #3. by times practiced
+        #4. by ??
+        #Set a rule to ask for only the first target word in some cases?
+        #picknumber = input('The grades for the words range from {}  to {}. What is the highest rank allowed?\n>'.format(len(ws.words)))
+        #picknumber = input('The grades for the words range from {}  to {}. What is the highest rank allowed?\n>'.format(len(ws.words)))
         if pickptype.answer == '1':
-            ws.CardLemma()
+            ws.questiontype = 'cardlemma'
+            self.pickfilter = multimenu({'g':'by grade','w':'By times answered wrong','t':'by times practiced','n':'do not filter'},promptnow='Do you want to filter the words that will be asked?')
+            self.evaluatePracticeFilter(con.session,ws)
+            picknumber = input('(After applying the filters) this word set contains {} source word entries. How many would you like to practice?\n>'.format(len(ws.allowedids)))
+            ws.CardLemma(int(picknumber))
         elif pickptype.answer == '2':
-            ws.ConjugationPractice()
+            ws.questiontype = 'rusConjug'
+            self.pickfilter = multimenu({'g':'by grade','w':'By times answered wrong','t':'by times practiced','n':'do not filter'},promptnow='Do you want to filter the words that will be asked?')
+            self.evaluatePracticeFilter(con.session,ws)
+            picknumber = input('(After applying the filters) this word set contains {} source word entries. How many would you like to practice?\n>'.format(len(ws.allowedids)))
+            ws.ConjugationPractice(int(picknumber))
         #Commit changes:
         con.session.add(ws)
         con.session.commit()
         input('Press enter to continue.')
+
+    def evaluatePracticeFilter(self,session,ws):
+        """"""
+        subquery = session.query(DbWord.id).filter(DbWord.wordset_id==self.cursetid).subquery()
+        if self.pickfilter.answer =='g':
+            if ws.questiontype == 'cardlemma':
+                lowest = session.query(func.min(LemmaMeta.grade)).filter(LemmaMeta.word_id.in_(subquery)).first()
+                highest = session.query(func.max(LemmaMeta.grade)).filter(LemmaMeta.word_id.in_(subquery)).first()
+                mingrade = int(input('Give the lowest grade allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                maxgrade = int(input('Give the highest grade allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                subq2 = session.query(LemmaMeta.word_id).filter(and_(LemmaMeta.word_id.in_(subquery),LemmaMeta.grade.between(mingrade,maxgrade)))
+                res = session.query(DbWord.id).filter(DbWord.id.in_(subq2))
+                allowedids = res.all()
+            elif ws.questiontype == 'rusConjug':
+                lowest = session.query(func.min(InflMeta.grade)).filter(InflMeta.word_id.in_(subquery)).first()
+                highest = session.query(func.max(InflMeta.grade)).filter(InflMeta.word_id.in_(subquery)).first()
+                mingrade = int(input('Give the lowest grade allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                maxgrade = int(input('Give the highest grade allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                subq2 = session.query(InflMeta.word_id).filter(and_(InflMeta.word_id.in_(subquery),InflMeta.grade.between(mingrade,maxgrade)))
+                res = session.query(DbWord.id).filter(DbWord.id.in_(subq2))
+                allowedids = res.all()
+        elif self.pickfilter.answer =='w':
+            if ws.questiontype == 'cardlemma':
+                lowest = session.query(func.min(LemmaMeta.wrong)).filter(LemmaMeta.word_id.in_(subquery)).first()
+                highest = session.query(func.max(LemmaMeta.wrong)).filter(LemmaMeta.word_id.in_(subquery)).first()
+                mingrade = int(input('Give the lowest wrong allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                maxgrade = int(input('Give the highest wrong allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                subq2 = session.query(LemmaMeta.word_id).filter(and_(LemmaMeta.word_id.in_(subquery),LemmaMeta.wrong.between(mingrade,maxgrade)))
+                res = session.query(DbWord.id).filter(DbWord.id.in_(subq2))
+                allowedids = res.all()
+            elif ws.questiontype == 'rusConjug':
+                lowest = session.query(func.min(InflMeta.wrong)).filter(InflMeta.word_id.in_(subquery)).first()
+                highest = session.query(func.max(InflMeta.wrong)).filter(InflMeta.word_id.in_(subquery)).first()
+                mingrade = int(input('Give the lowest wrong allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                maxgrade = int(input('Give the highest wrong allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+                subq2 = session.query(InflMeta.word_id).filter(and_(InflMeta.word_id.in_(subquery),InflMeta.wrong.between(mingrade,maxgrade)))
+                res = session.query(DbWord.id).filter(DbWord.id.in_(subq2))
+                allowedids = res.all()
+        #if self.pickfilter.answer =='t':
+        #    if ws.questiontype == 'cardlemma':
+        #        lowest = session.query(func.min(LemmaMeta.grade)).filter(LemmaMeta.word_id.in_(subquery)).first()
+        #        highest = session.query(func.max(LemmaMeta.grade)).filter(LemmaMeta.word_id.in_(subquery)).first()
+        #        mingrade = int(input('Give the lowest grade allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+        #        maxgrade = int(input('Give the highest grade allowed (from {} to {})\n>'.format(lowest[0],highest[0])))
+        elif self.pickfilter.answer =='n':
+            allowedids = session.query(DbWord.id).with_parent(ws).all()
+        #Flatten:
+        allowedids = list(zip(*allowedids))
+        ws.allowedids = allowedids[0]
 
     def inswords(self):
         """Insert words to the current wordset"""

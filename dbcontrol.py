@@ -76,13 +76,35 @@ class TargetWord(Base):
             self.language = DbWordset.targetlang
 
     def AskRusConj(self):
-        """Make a question about this word's conjugation"""
+        """Make a question about this word's conjugation
+        - For every uncorrect stress give 0,5 minus point
+        - For every uncorrect answer give 1 minus point
+        - if <= minus points, consider correct 
+        """
         print('{0}\n{1}{2}'.format(self.lemma,'='*len(self.lemma),'\n'*2))
         askedforms = ('s1pres','s3pres','p3pres','simp')
         askedvalues = pickValues(self.inflection,'form',askedforms)
+        minuspoints = 0
         for askedvalue in askedvalues:
             answer = input(askedvalue.form + ': ')
-            input('The correct answer is: ' + askedvalue.value)
+            while answer == answer.lower():
+                answer = input('Please indicate the stress with a capital letter!\n' + askedvalue.form + ': ')
+            if answer != UcaseStress(askedvalue.value,askedvalue.stress):
+                #If the user didn't give the exact right answer with the right stress
+                if answer.lower() == askedvalue.value.lower():
+                    #If only the stress was wrong
+                    minuspoints += 0.5
+                    print('The answer was correct, but you got the stress wrong.')
+                else:
+                    #If the word wasn't right, either
+                    print('Sorry, wrong answer.')
+                    minuspoints += 1
+                input('The correct answer is: ' + ColorStress(askedvalue.value,askedvalue.stress))
+            else:
+                print('Correct!')
+        input('Minus points for this word: {}\n===========================\n(press enter to continue)'.format(minuspoints))
+        return minuspoints
+
 
 class DbWord(Base):
     """The table that includes all the words"""
@@ -178,9 +200,21 @@ class DbWordset(Base):
         """Make a list of words that will be asked in one way or another"""
         self.wordstoask = list()
         #1. Collect all the words that can be used in this question type
-        for sourceword in self.words:
-            for word in sourceword.targetwords:
-                if self.EvalueateWordForQuestion(word):
+        if self.questiontype == 'rusConjug':
+            #for certain types, use the target words
+            for sourceword in self.words:
+                takethisword = True
+                for word in sourceword.targetwords:
+                    if not self.EvalueateWordForQuestion(word):
+                        takethisword = False
+                if takethisword and sourceword.id in self.allowedids:
+                    #if all the target words matched the condition, take this word
+                    self.wordstoask.append(sourceword)
+        if self.questiontype == 'cardlemma':
+            #For other types, use the source words
+            for word in self.words:
+                if self.EvalueateWordForQuestion(word) and word.id in self.allowedids:
+                    #if the source word matches the condition, take this word
                     self.wordstoask.append(word)
         #2. Limit the number of asked words and shuffle
         if wordcount>len(self.wordstoask):
@@ -194,6 +228,8 @@ class DbWordset(Base):
         if self.questiontype == 'rusConjug':
             if word.pos == 'V':
                 return True
+        if self.questiontype == 'cardlemma':
+            return True
         #If no condition matches, return false
         return False
 
@@ -202,10 +238,11 @@ class LemmaWordset(DbWordset):
     def __init__(self,creationdate=datetime.datetime.today(),name='unspecified',creator='unspecified',theme='unspecified',subtheme='unspecified',wstype='Lemmas'):
         super().__init__(name=name,creator=creator,theme=theme,subtheme=subtheme,wstype=wstype,creationdate=creationdate)
 
-    def CardLemma(self):
+    def CardLemma(self,wordcount=10):
         """Practice lemmas with basic flashcard questions"""
         practmenu = yesnomenu()
-        for word in self.words:
+        self.collectWordsToAsk(wordcount)
+        for word in self.wordstoask:
             os.system('cls' if os.name == 'nt' else 'clear')
             practmenu.question=('Do you know {} in tl?'.format(colored(word.lemma,'red')))
             word.WriteGenMeta()
@@ -217,15 +254,21 @@ class LemmaWordset(DbWordset):
                 word.lemmameta.wrong += 1
             word.PrintTargetWords()
 
-    def ConjugationPractice(self):
+    def ConjugationPractice(self,wordcount):
         """Questions based on the information about verbs' conjugation
         """
-        self.questiontype = 'rusConjug'
-        self.collectWordsToAsk(wordcount=10)
+        self.collectWordsToAsk(wordcount)
         for word in self.wordstoask:
-            os.system('cls' if os.name == 'nt' else 'clear')
-            word.AskRusConj()
-
+            for targetword in word.targetwords:
+                os.system('cls' if os.name == 'nt' else 'clear')
+                inflpoints = targetword.AskRusConj()
+                word.WriteGenMeta()
+                if inflpoints >= 1:
+                    word.inflmeta.grade -= 1
+                    word.inflmeta.wrong += 1
+                else:
+                    word.inflmeta.grade += 1
+                    word.inflmeta.right += 1
 
 class Inflection(Base):
     """Contains word forms"""
@@ -260,12 +303,18 @@ def MarkStress(word):
             return [word,stressidx]
 
 def pickValues(olist, attr, values):
-    """"""
+    """Input a list of objects. Pick all that have a value that is found in the 'values' list"""
     returnlist = list()
     for o in olist:
         if getattr(o,attr) in values:
             returnlist.append(o)
     return returnlist
+
+def ColorStress(word, letter):
+    return ''.join([word[:letter], colored(word[letter],'red'),  word[letter+1:]])
+
+def UcaseStress(word, letter):
+    return ''.join([word[:letter], word[letter].upper(),  word[letter+1:]])
 
 ###### other ######################################################
 
