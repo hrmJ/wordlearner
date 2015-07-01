@@ -6,7 +6,7 @@ from menus import Menu, yesnomenu, multimenu, freemenu
 from termcolor import colored
 import datetime
 import os
-from wiktionary import RusVerb
+from wiktionary import RusVerb, RusNoun
 import random
 
 engine = create_engine('sqlite:///words.db', echo=False)
@@ -75,33 +75,38 @@ class TargetWord(Base):
             self.pos = DbWord.posmenu.prompt_valid(definedquestion='Give the part of speech for this word')
             self.language = DbWordset.targetlang
 
-    def AskRusConj(self):
-        """Make a question about this word's conjugation
+    def AskRusInfl(self):
+        """Make a question about this word's declination/conjugation
         - For every uncorrect stress give 0,5 minus point
         - For every uncorrect answer give 1 minus point
         - if <= minus points, consider correct 
         """
         print('{0}\n{1}{2}'.format(self.lemma,'='*len(self.lemma),'\n'*2))
-        askedforms = ('s1pres','s3pres','p3pres','simp')
-        askedvalues = pickValues(self.inflection,'form',askedforms)
+        if self.pos == 'V':
+            askedforms = ('s1pres','s3pres','p3pres','simp')
+        elif self.pos == 'N':
+            askedforms = random.sample(FormNames.scases_ru, 2)
+            askedforms.extend(random.sample(FormNames.pcases_ru,2))
+        askedvalues = pickValues(self.inflection, 'form', askedforms)
         minuspoints = 0
         for askedvalue in askedvalues:
-            answer = input(askedvalue.form + ': ')
-            while answer == answer.lower():
-                answer = input('Please indicate the stress with a capital letter!\n' + askedvalue.form + ': ')
-            if answer != UcaseStress(askedvalue.value,askedvalue.stress):
-                #If the user didn't give the exact right answer with the right stress
-                if answer.lower() == askedvalue.value.lower():
-                    #If only the stress was wrong
-                    minuspoints += 0.5
-                    print('The answer was correct, but you got the stress wrong.')
+            if askedvalue != "-": #if the asked form doesn't exist, don't ask 
+                answer = input(askedvalue.form + ': ')
+                while answer == answer.lower():
+                    answer = input('Please indicate the stress with a capital letter!\n' + askedvalue.form + ': ')
+                if answer != UcaseStress(askedvalue.value,askedvalue.stress):
+                    #If the user didn't give the exact right answer with the right stress
+                    if answer.lower() == askedvalue.value.lower():
+                        #If only the stress was wrong
+                        minuspoints += 0.5
+                        print('The answer was correct, but you got the stress wrong.')
+                    else:
+                        #If the word wasn't right, either
+                        print('Sorry, wrong answer.')
+                        minuspoints += 1
+                    input('The correct answer is: ' + ColorStress(askedvalue.value,askedvalue.stress))
                 else:
-                    #If the word wasn't right, either
-                    print('Sorry, wrong answer.')
-                    minuspoints += 1
-                input('The correct answer is: ' + ColorStress(askedvalue.value,askedvalue.stress))
-            else:
-                print('Correct!')
+                    print('Correct!')
         input('Minus points for this word: {}\n===========================\n(press enter to continue)'.format(minuspoints))
         return minuspoints
 
@@ -185,22 +190,36 @@ class DbWordset(Base):
             setSourceLang()
         self.words.append(DbWord())
 
-    def InflectRusVerb(self):
+    def InflectRus(self):
         """Inflect all the verbs in a Russian wordset"""
         for sourceword in self.words:
             for word in sourceword.targetwords:
+                infldict = dict()
                 if word.pos == 'V':
                     #Fetch inflection information from wiktionary:
                     infldict = RusVerb(word.lemma)
-                    for form, value in infldict.items():
-                        stresslist = MarkStress(value)
-                        word.inflection.append(Inflection(form,stresslist[0],stresslist[1]))
+                elif word.pos == 'N':
+                    #Fetch inflection information from wiktionary:
+                    infldict = RusNoun(word.lemma)
+                elif word.pos == 'A':
+                    #Fetch inflection information from wiktionary:
+                    infldict = RusAdjective(word.lemma)
+                if infldict:
+                    if not word.inflection:
+                        #if this word has not yet been inflected
+                        for form, value in infldict.items():
+                            stresslist = MarkStress(value)
+                            if '—' in value:
+                                #if some value missing (e.g. no plural)
+                                stresslist = ('-',0)
+                            word.inflection.append(Inflection(form,stresslist[0],stresslist[1]))
+
 
     def collectWordsToAsk(self,wordcount):
         """Make a list of words that will be asked in one way or another"""
         self.wordstoask = list()
         #1. Collect all the words that can be used in this question type
-        if self.questiontype == 'rusConjug':
+        if self.questiontype == 'rusInflect':
             #for certain types, use the target words
             for sourceword in self.words:
                 takethisword = True
@@ -224,9 +243,12 @@ class DbWordset(Base):
 
     def EvalueateWordForQuestion(self,word):
         """"""
-        #Conjugation test for Russian verbs
-        if self.questiontype == 'rusConjug':
-            if word.pos == 'V':
+        #If thw word has no inflection, don't accept it
+        if not word.inflection:
+            return False
+        #Inflection test for Russian verbs
+        if self.questiontype == 'rusInflect':
+            if word.pos in ('V','N','A'):
                 return True
         if self.questiontype == 'cardlemma':
             return True
@@ -254,16 +276,16 @@ class LemmaWordset(DbWordset):
                 word.lemmameta.wrong += 1
             word.PrintTargetWords()
 
-    def ConjugationPractice(self,wordcount):
+    def InflPractice(self,wordcount):
         """Questions based on the information about verbs' conjugation
         """
         self.collectWordsToAsk(wordcount)
         for word in self.wordstoask:
             for targetword in word.targetwords:
                 os.system('cls' if os.name == 'nt' else 'clear')
-                inflpoints = targetword.AskRusConj()
+                inflpoints = targetword.AskRusInfl()
                 word.WriteGenMeta()
-                if inflpoints >= 1:
+                if inflpoints > 1:
                     word.inflmeta.grade -= 1
                     word.inflmeta.wrong += 1
                 else:
@@ -284,6 +306,12 @@ class Inflection(Base):
         self.form = form
         self.value = value
         self.stress = stress
+
+
+class FormNames:
+    """constant names form inflectional forms"""
+    scases_ru = ['snom','sgen','sdat','sacc','sinstr','sprep']
+    pcases_ru = ['pnom','pgen','pdat','pacc','pinstr','pprep']
 
 ###### functions ######################################################
 
