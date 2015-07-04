@@ -6,7 +6,7 @@ from menus import Menu, yesnomenu, multimenu, freemenu
 from termcolor import colored
 import datetime
 import os
-from wiktionary import RusVerb, RusNoun
+from wiktionary import FetchInflectionData
 import random
 
 engine = create_engine('sqlite:///words.db', echo=False)
@@ -87,6 +87,8 @@ class TargetWord(Base):
         elif self.pos == 'N':
             askedforms = random.sample(FormNames.scases_ru, 2)
             askedforms.extend(random.sample(FormNames.pcases_ru,2))
+        elif self.pos == 'A':
+            askedforms = random.sample(['msnom','fsnom','msgen'], 2)
         askedvalues = pickValues(self.inflection, 'form', askedforms)
         minuspoints = 0
         for askedvalue in askedvalues:
@@ -194,20 +196,12 @@ class DbWordset(Base):
         """Inflect all the verbs in a Russian wordset"""
         for sourceword in self.words:
             for word in sourceword.targetwords:
-                infldict = dict()
-                if word.pos == 'V':
-                    #Fetch inflection information from wiktionary:
-                    infldict = RusVerb(word.lemma)
-                elif word.pos == 'N':
-                    #Fetch inflection information from wiktionary:
-                    infldict = RusNoun(word.lemma)
-                elif word.pos == 'A':
-                    #Fetch inflection information from wiktionary:
-                    infldict = RusAdjective(word.lemma)
-                if infldict:
-                    if not word.inflection:
-                        #if this word has not yet been inflected
+                if not word.inflection:
+                    #if this word has not yet been inflected
+                    infldict = FetchInflectionData(word)
+                    if infldict:
                         for form, value in infldict.items():
+                            #Mark the stress and store it as a numeric value in the database
                             stresslist = MarkStress(value)
                             if '—' in value:
                                 #if some value missing (e.g. no plural)
@@ -243,11 +237,11 @@ class DbWordset(Base):
 
     def EvalueateWordForQuestion(self,word):
         """"""
-        #If thw word has no inflection, don't accept it
-        if not word.inflection:
-            return False
         #Inflection test for Russian verbs
         if self.questiontype == 'rusInflect':
+            #If thw word has no inflection, don't accept it
+            if not word.inflection:
+                return False
             if word.pos in ('V','N','A'):
                 return True
         if self.questiontype == 'cardlemma':
@@ -260,10 +254,17 @@ class LemmaWordset(DbWordset):
     def __init__(self,creationdate=datetime.datetime.today(),name='unspecified',creator='unspecified',theme='unspecified',subtheme='unspecified',wstype='Lemmas'):
         super().__init__(name=name,creator=creator,theme=theme,subtheme=subtheme,wstype=wstype,creationdate=creationdate)
 
+    def Practice(self,wordcount=10):
+        """Choose the tyoe of practice"""
+        self.collectWordsToAsk(wordcount)
+        if self.questiontype == 'rusInflect':
+            self.InflPractice(wordcount)
+        elif self.questiontype == 'cardlemma':
+            self.CardLemma(wordcount)
+
     def CardLemma(self,wordcount=10):
         """Practice lemmas with basic flashcard questions"""
         practmenu = yesnomenu()
-        self.collectWordsToAsk(wordcount)
         for word in self.wordstoask:
             os.system('cls' if os.name == 'nt' else 'clear')
             practmenu.question=('Do you know {} in tl?'.format(colored(word.lemma,'red')))
@@ -279,7 +280,6 @@ class LemmaWordset(DbWordset):
     def InflPractice(self,wordcount):
         """Questions based on the information about verbs' conjugation
         """
-        self.collectWordsToAsk(wordcount)
         for word in self.wordstoask:
             for targetword in word.targetwords:
                 os.system('cls' if os.name == 'nt' else 'clear')
