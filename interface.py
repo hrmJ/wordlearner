@@ -41,7 +41,7 @@ class MainMenu:
     the comand line menu options and actions"""
     mainanswers = {    '1': 'Create a new wordset',
                        '2': 'View existing wordsets',
-                       '3': 'Append to existing wordset',
+                       '3': 'View words in this set',
                        '4': 'Practice',
                        '5': 'Insert words to the current set',
                        '6': 'Inflect words in this set',
@@ -107,6 +107,17 @@ class MainMenu:
             con.session.add(newset)
             con.session.commit()
             con.session.close()
+
+
+    def printset(self):
+        """print the words in the set"""
+        #Clear the terminal:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        #Load sqlalchemy session and pick the current wordset
+        con.LoadSession()
+        ws = con.session.query(LemmaWordset).get(self.cursetid)
+        ws.printWords()
+        input('Press enter to continue')
 
 
     def viewsets(self):
@@ -187,6 +198,8 @@ class MainMenu:
             self.createset()
         elif answer == '2':
             self.viewsets()
+        elif answer == '3':
+            self.printset()
         elif answer == '4':
             self.practice()
         elif answer == '5':

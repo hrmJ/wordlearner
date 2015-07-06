@@ -249,6 +249,37 @@ class DbWordset(Base):
         #If no condition matches, return false
         return False
 
+    def printWords(self):
+        """Print the words in the set """
+        #Build a printable table of words and target words
+        rows = list()
+        colwidths = dict()
+        for idx, word in enumerate(self.words):
+            rows.append([word.lemma])
+            try:
+                if len(word.lemma) > colwidths[0]:
+                    #mark the longest word of this column
+                    colwidths[0] = len(word.lemma)
+            except KeyError:
+                    colwidths[0] = len(word.lemma)
+
+            #Add the targetwords in the row
+            for idx2, targetword in enumerate(word.targetwords):
+                try:
+                    if len(targetword.lemma) > colwidths[idx2]:
+                        #mark the longest word of this column
+                        colwidths[idx2+1] = len(targetword.lemma)
+                except KeyError:
+                    colwidths[idx2+1] = len(targetword.lemma)
+                #Add this target word to this row
+                rows[-1].append(targetword.lemma)
+
+        for row in rows:
+            printstring = ''
+            for idx, col in enumerate(row):
+                printstring += '{}{}{} | '.format('{',str(idx) + ':' +  str(colwidths[idx]),'}' )
+            print(printstring.format(*row))
+
 class LemmaWordset(DbWordset):
     """" .. """
     def __init__(self,creationdate=datetime.datetime.today(),name='unspecified',creator='unspecified',theme='unspecified',subtheme='unspecified',wstype='Lemmas'):
