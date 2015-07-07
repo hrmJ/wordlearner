@@ -277,7 +277,10 @@ class DbWordset(Base):
         for row in rows:
             printstring = ''
             for idx, col in enumerate(row):
-                printstring += '{}{}{} | '.format('{',str(idx) + ':' +  str(colwidths[idx]),'}' )
+                try:
+                    printstring += '{}{}{} | '.format('{',str(idx) + ':' +  str(colwidths[idx]),'}' )
+                except KeyError:
+                    printstring += '{}{} | '.format('{',str(idx) + ':9}' )
             print(printstring.format(*row))
 
 class LemmaWordset(DbWordset):

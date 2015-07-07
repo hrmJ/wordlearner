@@ -1,5 +1,7 @@
 from bs4 import BeautifulSoup
 import urllib
+import re
+
 
 
 def GetPage(wordstring = 'лазить'):
@@ -94,6 +96,9 @@ class Inflectiondict(dict):
                         #special case: adjective/fem/instr
                         splitted = self[category].split()
                         self[category] = splitted[0]
+                    else:
+                        #in case there are superfluous tags inside the inflectional form
+                        self[category] = re.sub('<[^>]*>', '', str(self[category]))
                 except IndexError:
                     print('Category {} missing, skipping it.'.format(category))
 
