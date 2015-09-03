@@ -45,6 +45,7 @@ class MainMenu:
                        '4': 'Practice',
                        '5': 'Insert words to the current set',
                        '6': 'Inflect words in this set',
+                       '7': 'Edit words in this set',
                        'q': 'quit'}
 
     def __init__(self):
@@ -190,6 +191,31 @@ class MainMenu:
         con.session.close()
         input('Press enter to continue')
 
+    def EditWords(self):
+        """Edit wirds in This set"""
+        con.LoadSession()
+        ws = con.session.query(DbWordset).get(self.cursetid)
+        worddict = dict()
+        for idx, word in enumerate(ws.words):
+            worddict[str(idx)] = word.lemma
+        editmenu = multimenu(validanswers=worddict, promptnow='Choose the word to edit:')
+        editedword = ws.words[int(editmenu.answer)]
+        if multimenu(validanswers={'y':'yes','n':'no'}, promptnow='Edit source word?') == 'y':
+            editedword.lemma = input('Replace {} with:'.format(editedword.lemma))
+        for targetword in editedword.targetwords:
+            targetmenu = multimenu(validanswers={'d':'delete','e':'edit', 'c': 'Leave as is'}, promptnow='What shall I do with {}'.format(targetword.lemma))
+            if targetmenu.answer == 'd':
+                editedword.targetwords
+            elif targetmenu.answer == 'e':
+                targetword.lemma = input('Replace {} with:'.format(targetword.lemma))
+        #Commit changes:
+        con.session.add(ws)
+        con.session.commit()
+        con.session.close()
+        input('Press enter to continue')
+
+
+
     def MenuChooser(self,answer):
         if answer == 'q':
             self.run = False
@@ -206,6 +232,8 @@ class MainMenu:
             self.inswords()
         elif answer == '6':
             self.inflectwords()
+        elif answer == '7':
+            self.EditWords()
 
 ################################################################################
 def DefineMinMax(subquery, session, category, attribute):
